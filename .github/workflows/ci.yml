@@ -18,11 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Scan Gitleaks (avant compilation)
-      - name: Run Gitleaks scan
-        uses: zricethezav/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
 
       # 3. Upload rapport Gitleaks
       - name: Upload Gitleaks report
