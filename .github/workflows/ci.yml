@@ -106,6 +106,5 @@ jobs:
       - name: Build Success Notification
         if: success()
         run: |
-          echo "✅ Pipeline completed successfully!"
-          echo "🐳 Image pushed: $DOCKER_IMAGE_NAME:latest"
-          echo "🏷️  SHA tag: $DOCKER_IMAGE_NAME:${{ github.sha }}"
+          echo "Pipeline completed successfully!"
+          echo "Image pushed: $DOCKER_IMAGE_NAME:latest"
