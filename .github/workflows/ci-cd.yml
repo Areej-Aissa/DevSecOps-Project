@@ -1,0 +1,111 @@
+name: CI/CD Pipeline DevSecOps
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/todo-api
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout du code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Scan Gitleaks (détection de secrets)
+      - name: Run Gitleaks scan
+        uses: zricethezav/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. Upload rapport Gitleaks
+      - name: Upload Gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: results.sarif
+
+      # 4. Setup Java
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # 5. Build avec Maven
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      # 6. Run tests
+      - name: Run tests
+        run: mvn test
+
+      # 7. Login Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 8. Build Docker image
+      - name: Build Docker image
+        run: docker build -t $DOCKER_IMAGE_NAME:latest -t $DOCKER_IMAGE_NAME:${{ github.sha }} .
+
+      # 9. Test Docker image
+      - name: Test Docker image locally
+        run: |
+          docker run -d --name todo-api-test -p 8080:8080 $DOCKER_IMAGE_NAME:latest
+          sleep 20
+          curl -f http://localhost:8080/api/todos/health || exit 1
+          curl -f http://localhost:8080/actuator/health || exit 1
+          docker stop todo-api-test
+          docker rm todo-api-test
+
+      # 10. Scan Trivy (vulnérabilités)
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      # 11. Upload rapport Trivy
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
+
+      # 12. Scan Trivy en format table pour affichage
+      - name: Run Trivy scanner (table format)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.DOCKER_IMAGE_NAME }}:latest
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+      # 13. Push sur Docker Hub
+      - name: Push Docker image to Docker Hub
+        if: success()
+        run: |
+          docker push $DOCKER_IMAGE_NAME:latest
+          docker push $DOCKER_IMAGE_NAME:${{ github.sha }}
+
+      # 14. Notification de succès
+      - name: Build Success Notification
+        if: success()
+        run: |
+          echo "✅ Pipeline completed successfully!"
+          echo "🐳 Image pushed: $DOCKER_IMAGE_NAME:latest"
+          echo "🏷️  SHA tag: $DOCKER_IMAGE_NAME:${{ github.sha }}"
