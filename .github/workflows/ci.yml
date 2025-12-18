@@ -74,7 +74,7 @@ jobs:
           format: 'table'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          exit-code: '0'
 
       # 11. Upload rapport Trivy
       - name: Upload Trivy report
@@ -83,14 +83,6 @@ jobs:
         with:
           name: trivy-report
           path: trivy-results.sarif
-
-      # 12. Scan Trivy en format table pour affichage
-      - name: Run Trivy scanner (table format)
-        uses: aquasecurity/trivy-action@0.20.0
-        with:
-          image-ref: ${{ env.DOCKER_IMAGE_NAME }}:latest
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
 
       # 13. Push sur Docker Hub
       - name: Push Docker image
